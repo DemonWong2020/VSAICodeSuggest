@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>AICodeSuggest</RootNamespace>
+    <AssemblyName>AICodeSuggest</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>8</LangVersion>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <CreateVsixContainer>true</CreateVsixContainer>
+    <VSIXName>AICodeSuggest</VSIXName>
+    <DeployExtension>false</DeployExtension>
+    <DeployVSTemplates>false</DeployVSTemplates>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
+    <TemplateOutputDirectory>$(OutputPath)Templates</TemplateOutputDirectory>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <PkgdefProjectOutputGroupDependsOn>GeneratePkgDef</PkgdefProjectOutputGroupDependsOn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.*" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <GeneratePathProperty>true</GeneratePathProperty>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Security" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+    <Content Include="LICENSE.txt">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="$(OutputPath)Newtonsoft.Json.dll">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <VSIXSubPath>.</VSIXSubPath>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\**\*" Condition="Exists('Resources')">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+  </ItemGroup>
+
+  <Import Project="$(PkgMicrosoft_VSSDK_BuildTools)\tools\vssdk\Microsoft.VsSDK.targets"
+          Condition="'$(PkgMicrosoft_VSSDK_BuildTools)' != ''" />
+
+  <PropertyGroup>
+    <TargetVsixContainer>$(OutputPath)$(VSIXName).vsix</TargetVsixContainer>
+  </PropertyGroup>
+
+  <Target Name="EnsureCreateVsix" AfterTargets="AfterBuild" DependsOnTargets="CreateVsixContainer">
+    <Message Text="VSIX built: $(TargetVsixContainer)" Importance="high" />
+    <!-- 复制到输出目录方便查找 -->
+    <Copy SourceFiles="$(TargetVsixContainer)"
+          DestinationFolder="$(OutputPath)"
+          Condition="Exists('$(TargetVsixContainer)')" />
+  </Target>
+
+  <Target Name="SetPkgDefAssemblyPath" BeforeTargets="GeneratePkgDef">
+    <PropertyGroup>
+      <CreatePkgDefAssemblyToProcess>$(MSBuildProjectDirectory)\$(OutputPath)$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="FilterVsixItems" AfterTargets="ResolveReferences" BeforeTargets="GetVsixSourceItems">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)%(Extension)' == 'System.Text.Encodings.Web.dll'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)%(Extension)' == 'Microsoft.VisualStudio.Extensibility.Editor.Contracts.dll'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)%(Extension)' == 'Microsoft.VisualStudio.Linux.ConnectionManager.Store.dll'" />
+    </ItemGroup>
+    <Message Text="Filtered ReferenceCopyLocalPaths: removed Encodings.Web, Extensibility.Editor.Contracts, Linux.ConnectionManager.Store" Importance="high" />
+  </Target>
+</Project>
