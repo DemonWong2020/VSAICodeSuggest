@@ -10,7 +10,7 @@ using Task = System.Threading.Tasks.Task;
 namespace AICodeSuggest
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration(Vsix.Name, Vsix.Description, Vsix.Version, IconResourceID = 400)]
+    [InstalledProductRegistration(Vsix.Name, Vsix.Description, Vsix.Version)]
     [ProvideBindingPath]
     [Guid(PackageGuidString)]
     [ProvideOptionPage(typeof(GeneralOptions), "AI Code Suggest", "通用设置", 0, 0, true)]
@@ -54,7 +54,9 @@ namespace AICodeSuggest
         {
             if (disposing)
             {
+                (_aiClientService as IDisposable)?.Dispose();
                 _logService?.Dispose();
+                Instance = null;
             }
             base.Dispose(disposing);
         }

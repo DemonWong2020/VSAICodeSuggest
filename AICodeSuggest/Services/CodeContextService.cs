@@ -31,38 +31,45 @@ namespace AICodeSuggest.Services
             _analyzer = analyzer ?? throw new ArgumentNullException(nameof(analyzer));
         }
 
-        public async Task<CodeContext> GetCodeContextAsync(CancellationToken ct)
+        public async Task<CodeContext> GetCodeContextAsync(IWpfTextView textView, CancellationToken ct)
         {
             await _package.JoinableTaskFactory.SwitchToMainThreadAsync(ct);
 
             try
             {
-                var textManager = await _package.GetServiceAsync(typeof(SVsTextManager)) as IVsTextManager;
-                if (textManager == null)
-                {
-                    _log.Info("CodeContext: 无法获取 IVsTextManager");
-                    return CodeContext.Empty;
-                }
+                IWpfTextView wpfView = textView;
 
-                if (ErrorHandler.Failed(textManager.GetActiveView(1, null, out IVsTextView vsTextView)) || vsTextView == null)
-                {
-                    _log.Info("CodeContext: 无活动编辑器");
-                    return CodeContext.Empty;
-                }
-
-                var componentModel = await _package.GetServiceAsync(typeof(SComponentModel)) as IComponentModel;
-                var adapterFactory = componentModel?.GetService<IVsEditorAdaptersFactoryService>();
-                if (adapterFactory == null)
-                {
-                    _log.Info("CodeContext: 无法获取 IVsEditorAdaptersFactoryService");
-                    return CodeContext.Empty;
-                }
-
-                var wpfView = adapterFactory.GetWpfTextView(vsTextView);
+                // 如果调用方传入了 textView 则直接使用（来自 SuggestionTagger），
+                // 否则回退到查询 IVsTextManager 的活动视图（兼容旧调用路径）
                 if (wpfView == null)
                 {
-                    _log.Info("CodeContext: 无法获取 IWpfTextView");
-                    return CodeContext.Empty;
+                    var textManager = await _package.GetServiceAsync(typeof(SVsTextManager)) as IVsTextManager;
+                    if (textManager == null)
+                    {
+                        _log.Info("CodeContext: 无法获取 IVsTextManager");
+                        return CodeContext.Empty;
+                    }
+
+                    if (ErrorHandler.Failed(textManager.GetActiveView(1, null, out IVsTextView vsTextView)) || vsTextView == null)
+                    {
+                        _log.Info("CodeContext: 无活动编辑器");
+                        return CodeContext.Empty;
+                    }
+
+                    var componentModel = await _package.GetServiceAsync(typeof(SComponentModel)) as IComponentModel;
+                    var adapterFactory = componentModel?.GetService<IVsEditorAdaptersFactoryService>();
+                    if (adapterFactory == null)
+                    {
+                        _log.Info("CodeContext: 无法获取 IVsEditorAdaptersFactoryService");
+                        return CodeContext.Empty;
+                    }
+
+                    wpfView = adapterFactory.GetWpfTextView(vsTextView);
+                    if (wpfView == null)
+                    {
+                        _log.Info("CodeContext: 无法获取 IWpfTextView");
+                        return CodeContext.Empty;
+                    }
                 }
 
                 return ExtractContext(wpfView);

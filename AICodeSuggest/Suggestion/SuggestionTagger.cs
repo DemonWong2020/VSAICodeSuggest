@@ -70,6 +70,10 @@ namespace AICodeSuggest.Suggestion
             var delayMs = options.TriggerDelayMs;
             if (delayMs < 100) delayMs = 100;
 
+            // 在 UI 线程上捕获触发时的光标位置（避免时机漂移和跨线程访问）
+            var triggerPosition = _textView.Caret.Position.BufferPosition;
+            var jtf = package.JoinableTaskFactory;
+
             Task.Run(async () =>
             {
                 try
@@ -77,21 +81,31 @@ namespace AICodeSuggest.Suggestion
                     await Task.Delay(delayMs, token);
                     if (token.IsCancellationRequested) return;
 
-                    var engine = AICodeSuggestPackage.Instance?.SuggestionEngine;
+                    var engine = package.SuggestionEngine;
                     if (engine == null) return;
 
-                    var suggestion = await engine.GenerateSuggestionAsync(token);
+                    // 将触发时所在的 IWpfTextView 传递给引擎，
+                    // 使上下文引擎使用当前编辑器的视图而非重新查询 active view
+                    var suggestion = await engine.GenerateSuggestionAsync(_textView, token);
                     if (token.IsCancellationRequested) return;
+
+                    // 切回 UI 线程后再操作 WPF 元素和触发 TagsChanged
+                    await jtf.SwitchToMainThreadAsync(token);
+                    if (token.IsCancellationRequested) return;
+
                     if (suggestion.IsEmpty)
                     {
-                        if (suggestion.HasReason)
-                            AICodeSuggestPackage.Instance?.LogService?.Info($"建议为空，原因: {suggestion.Reason}");
+                        package.LogService?.Info(
+                            $"建议为空{(suggestion.HasReason ? "，原因: " + suggestion.Reason : "（无具体原因）")}");
                         return;
                     }
 
                     _currentSuggestion = suggestion.Text?.Replace("\r\n", "\n").Replace("\r", "\n") ?? string.Empty;
                     _acceptedCharCount = 0;
-                    _suggestionPosition = _textView.Caret.Position.BufferPosition;
+                    _suggestionPosition = triggerPosition;
+
+                    AICodeSuggestPackage.Instance?.LogService?.Info(
+                        $"Tagger: 设置建议, len={_currentSuggestion.Length}, pos={triggerPosition.Position}");
 
                     TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(
                         new SnapshotSpan(_suggestionPosition.Value, 0)));
@@ -101,7 +115,8 @@ namespace AICodeSuggest.Suggestion
                 }
                 catch (Exception ex)
                 {
-                    AICodeSuggestPackage.Instance?.LogService?.Error($"建议生成失败: {ex.Message}");
+                    await jtf.SwitchToMainThreadAsync(CancellationToken.None);
+                    package.LogService?.Error($"建议生成失败: {ex.Message}");
                 }
             }, token);
         }

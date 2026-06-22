@@ -30,6 +30,8 @@ namespace AICodeSuggest.Suggestion
 
         private void OnTagsChanged(object sender, SnapshotSpanEventArgs e)
         {
+            var pkg = AICodeSuggestPackage.Instance;
+            pkg?.LogService?.Info($"GhostText: TagsChanged, suggestion=\"{TruncateForLog(_tagger.CurrentSuggestion)}\"");
             RemoveAdornment();
             RenderSuggestion();
         }
@@ -54,18 +56,34 @@ namespace AICodeSuggest.Suggestion
         private void RenderSuggestion()
         {
             var suggestion = _tagger.CurrentSuggestion;
-            if (string.IsNullOrEmpty(suggestion)) return;
+            if (string.IsNullOrEmpty(suggestion))
+            {
+                AICodeSuggestPackage.Instance?.LogService?.Info("GhostText: Render 跳过 - 无可显示建议");
+                return;
+            }
 
             var acceptedCount = _tagger.AcceptedCharCount;
             var remaining = suggestion.Substring(acceptedCount);
-            if (string.IsNullOrEmpty(remaining)) return;
+            if (string.IsNullOrEmpty(remaining))
+            {
+                AICodeSuggestPackage.Instance?.LogService?.Info("GhostText: Render 跳过 - 建议已全部接受");
+                return;
+            }
 
             var pos = _tagger.SuggestionPosition;
-            if (!pos.HasValue) return;
+            if (!pos.HasValue)
+            {
+                AICodeSuggestPackage.Instance?.LogService?.Warn("GhostText: Render 跳过 - 无建议位置");
+                return;
+            }
 
             var caretPoint = pos.Value.TranslateTo(_textView.TextSnapshot, PointTrackingMode.Positive);
             var startLine = _textView.GetTextViewLineContainingBufferPosition(caretPoint);
-            if (startLine == null) return;
+            if (startLine == null)
+            {
+                AICodeSuggestPackage.Instance?.LogService?.Warn("GhostText: Render 跳过 - 光标行不在可见范围内");
+                return;
+            }
 
             var package = AICodeSuggestPackage.Instance;
             var options = package?.GetDialogPage(typeof(GeneralOptions)) as GeneralOptions;
@@ -80,6 +98,8 @@ namespace AICodeSuggest.Suggestion
             var lineHeight = _textView.LineHeight;
 
             var bounds = startLine.GetCharacterBounds(caretPoint);
+            double baseLeft = bounds.Right - _textView.ViewportLeft;
+            double baseTop = startLine.TextTop - _textView.ViewportTop;
 
             var container = new Canvas { IsHitTestVisible = false, ClipToBounds = false };
 
@@ -104,17 +124,8 @@ namespace AICodeSuggest.Suggestion
                 };
 
                 container.Children.Add(tb);
-
-                if (i == 0)
-                {
-                    Canvas.SetLeft(tb, bounds.Right - _textView.ViewportLeft);
-                    Canvas.SetTop(tb, startLine.TextTop - _textView.ViewportTop);
-                }
-                else
-                {
-                    Canvas.SetLeft(tb, 0);
-                    Canvas.SetTop(tb, startLine.TextTop - _textView.ViewportTop + i * lineHeight);
-                }
+                Canvas.SetLeft(tb, baseLeft);
+                Canvas.SetTop(tb, baseTop + i * lineHeight);
             }
 
             // 操作提示
@@ -131,11 +142,13 @@ namespace AICodeSuggest.Suggestion
                 FontSize = fontSize * 0.75
             };
             container.Children.Add(hint);
-            Canvas.SetLeft(hint, 0);
-            Canvas.SetTop(hint, startLine.TextTop - _textView.ViewportTop + displayLineCount * lineHeight + 2);
+            Canvas.SetLeft(hint, baseLeft);
+            Canvas.SetTop(hint, baseTop + displayLineCount * lineHeight + 2);
 
             _currentAdornment = container;
             _layer.AddAdornment(AdornmentPositioningBehavior.ViewportRelative, null, null, container, null);
+            AICodeSuggestPackage.Instance?.LogService?.Info(
+                $"GhostText: 已渲染 {displayLineCount}/{rawLines.Length} 行, pos=({baseLeft:F0},{baseTop:F0})");
         }
 
         private void RemoveAdornment()
@@ -145,6 +158,12 @@ namespace AICodeSuggest.Suggestion
                 _layer.RemoveAdornment(_currentAdornment);
                 _currentAdornment = null;
             }
+        }
+
+        private static string TruncateForLog(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "(空)";
+            return text.Length <= 100 ? text : text.Substring(0, 97) + "...";
         }
     }
 }

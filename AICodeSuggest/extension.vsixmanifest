@@ -24,5 +24,6 @@
   </Prerequisites>
   <Assets>
     <Asset Type="Microsoft.VisualStudio.VsPackage" Path="AICodeSuggest.pkgdef" />
+    <Asset Type="Microsoft.VisualStudio.MefComponent" Path="AICodeSuggest.dll" />
   </Assets>
 </PackageManifest>

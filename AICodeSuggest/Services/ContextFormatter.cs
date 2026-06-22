@@ -80,7 +80,10 @@ namespace AICodeSuggest.Services
 
             // ── 补全指令 ──
             sb.AppendLine("## 代码补全");
-            sb.AppendLine($"在 `<CURSOR_HERE>` 位置补全代码。文件: `{ctx.DocumentPath ?? "Untitled"}`。");
+            sb.AppendLine($"文件: `{ctx.DocumentPath ?? "Untitled"}`。");
+            sb.AppendLine("<CURSOR_HERE> 标记了光标位置。请生成从光标处开始的代码补全。");
+            sb.Append("光标前的注释（如 `// ...` 或 `/* ... */`）是用户的意图描述，");
+            sb.AppendLine("请生成实现该意图的代码。");
 
             // ── 代码正文 ──
             if (!string.IsNullOrWhiteSpace(ctx.BeforeCursor) || !string.IsNullOrWhiteSpace(ctx.CurrentLine))

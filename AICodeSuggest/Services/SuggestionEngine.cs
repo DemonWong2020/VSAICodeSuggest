@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Text.Editor;
 using AICodeSuggest.Models;
 using AICodeSuggest.Options;
 
@@ -24,7 +25,7 @@ namespace AICodeSuggest.Services
             _log = log ?? throw new ArgumentNullException(nameof(log));
         }
 
-        public async Task<AISuggestion> GenerateSuggestionAsync(CancellationToken ct)
+        public async Task<AISuggestion> GenerateSuggestionAsync(IWpfTextView textView, CancellationToken ct)
         {
             var sw = Stopwatch.StartNew();
 
@@ -38,8 +39,8 @@ namespace AICodeSuggest.Services
                     return AISuggestion.Empty("功能已关闭");
                 }
 
-                // 2. 采集代码上下文
-                var context = await _codeContext.GetCodeContextAsync(ct);
+                // 2. 采集代码上下文（使用 tagger 传入的 textView，避免查询 active view 时脱节）
+                var context = await _codeContext.GetCodeContextAsync(textView, ct);
                 if (ct.IsCancellationRequested || context.IsEmpty)
                 {
                     _log.Info("SuggestionEngine: 代码上下文为空");

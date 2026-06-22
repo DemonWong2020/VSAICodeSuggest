@@ -77,6 +77,8 @@ namespace AICodeSuggest.Options
             if (TriggerDelayMs > 1000) TriggerDelayMs = 1000;
             if (ContextLinesBefore < 5) ContextLinesBefore = 5;
             if (ContextLinesBefore > 200) ContextLinesBefore = 200;
+            if (MaxLinesAfter < 0) MaxLinesAfter = 0;
+            if (MaxLinesAfter > 50) MaxLinesAfter = 50;
             if (MaxContextTokens < 0) MaxContextTokens = 0;
             if (MaxContextTokens > 8192) MaxContextTokens = 8192;
             if (SuggestionMaxLength < 50) SuggestionMaxLength = 50;

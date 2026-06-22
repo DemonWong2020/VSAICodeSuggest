@@ -17,6 +17,11 @@ namespace AICodeSuggest.Providers
 
         public string ProviderName => "Ollama 本地";
 
+        public void Dispose()
+        {
+            _httpClient?.Dispose();
+        }
+
         public OllamaProvider(string endpoint, ILogService log)
         {
             _endpoint = endpoint?.TrimEnd('/') ?? throw new ArgumentNullException(nameof(endpoint));
@@ -45,9 +50,10 @@ namespace AICodeSuggest.Providers
             };
 
             var json = JsonConvert.SerializeObject(payload);
-            _log.Info($"Ollama 请求: endpoint={_endpoint}, model={request.Model}");
+            var url = $"{_endpoint}/api/chat";
+            _log.Info($"Ollama 请求: url={url}, model={request.Model}");
 
-            var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}/api/chat")
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };
@@ -59,6 +65,13 @@ namespace AICodeSuggest.Providers
             {
                 _log.Warn($"Ollama API 返回错误 {httpResponse.StatusCode}: {Truncate(responseBody, 200)}");
                 throw new HttpRequestException($"Ollama 错误: {Truncate(responseBody, 200)}");
+            }
+
+            if (!IsJsonResponse(responseBody))
+            {
+                var contentType = httpResponse.Content.Headers.ContentType?.MediaType ?? "unknown";
+                _log.Error($"Ollama 端点 {url} 返回了非 JSON 响应 (Content-Type: {contentType}): {Truncate(responseBody, 500)}");
+                throw new HttpRequestException($"端点返回了非 JSON 响应 (Content-Type: {contentType})。请检查 Ollama 服务是否正常运行。当前请求地址: {url}");
             }
 
             return ParseResponse(responseBody);
@@ -75,6 +88,17 @@ namespace AICodeSuggest.Providers
             {
                 return false;
             }
+        }
+
+        private static bool IsJsonResponse(string body)
+        {
+            if (string.IsNullOrEmpty(body)) return false;
+            for (int i = 0; i < body.Length; i++)
+            {
+                if (!char.IsWhiteSpace(body[i]))
+                    return body[i] == '{' || body[i] == '[';
+            }
+            return false;
         }
 
         private AIResponse ParseResponse(string responseJson)

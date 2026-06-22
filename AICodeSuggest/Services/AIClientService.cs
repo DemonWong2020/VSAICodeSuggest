@@ -9,17 +9,29 @@ using AICodeSuggest.Providers;
 
 namespace AICodeSuggest.Services
 {
-    public class AIClientService : IAIClientService
+    public class AIClientService : IAIClientService, IDisposable
     {
         private readonly AsyncPackage _package;
         private readonly ILogService _log;
         private readonly IContextFormatter _formatter;
+        private IAIProvider _cachedProvider;
+        private string _cachedProviderKey;
+        private bool _disposed;
 
         private const string CodeCompletionSystemPrompt =
-            "You are a code completion assistant. Given structured code context around a cursor position, " +
-            "output ONLY the code that should appear at the cursor. Do NOT include explanations, " +
-            "markdown code fences, or any text that is not valid code. Return the raw code continuation " +
-            "that begins at the cursor position.";
+            "You are an inline code completion assistant embedded in an IDE, similar to GitHub Copilot. " +
+            "Your task is to predict and generate the code the user is about to write at the <CURSOR_HERE> position.\n\n" +
+            "Rules:\n" +
+            "1. Output ONLY the raw code that should appear at the cursor. No markdown fences, no explanations.\n" +
+            "2. If there is a comment immediately before the cursor, treat it as the user's intent — generate code " +
+            "that implements what the comment describes (e.g. \"// sort the array\" → sorting logic).\n" +
+            "3. Follow the existing code style: indentation, naming conventions, and patterns in the surrounding code.\n" +
+            "4. Complete the current statement/block naturally — if the cursor is in the middle of a line, " +
+            "continue from that point. If it's at the start of a new line, generate an appropriate new statement.\n" +
+            "5. Be concise but complete. Generate just enough code to finish the logical unit (statement, block, or method).\n" +
+            "6. Use local variables, parameters, and types that are already in scope (see the context).\n" +
+            "7. If the context shows a partial expression like \"var x = \", complete the right-hand side appropriately.\n" +
+            "8. NEVER repeat code that already exists after the cursor — only generate NEW code.";
 
         public AIClientService(AsyncPackage package, ILogService log, IContextFormatter formatter)
         {
@@ -41,7 +53,7 @@ namespace AICodeSuggest.Services
 
                 var generalOptions = _package.GetDialogPage(typeof(GeneralOptions)) as GeneralOptions;
 
-                var provider = AIProviderFactory.Create(options, _log);
+                var provider = GetOrCreateProvider(options);
 
                 // 使用 ContextFormatter 构建结构化提示词
                 string userPrompt = _formatter.FormatContext(context, generalOptions);
@@ -101,13 +113,34 @@ namespace AICodeSuggest.Services
                 if (options == null || string.IsNullOrWhiteSpace(options.ApiEndpoint))
                     return false;
 
-                var provider = AIProviderFactory.Create(options, _log);
+                var provider = GetOrCreateProvider(options);
                 return await provider.ValidateConnectionAsync(ct);
             }
             catch
             {
                 return false;
             }
+        }
+
+        private IAIProvider GetOrCreateProvider(AIModelOptions options)
+        {
+            var key = $"{options.ProviderType}|{options.ApiEndpoint}|{options.ApiKey ?? ""}";
+            if (_cachedProvider != null && _cachedProviderKey == key)
+                return _cachedProvider;
+
+            // 释放旧 provider（配置变更时）
+            _cachedProvider?.Dispose();
+            _cachedProvider = AIProviderFactory.Create(options, _log);
+            _cachedProviderKey = key;
+            return _cachedProvider;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _cachedProvider?.Dispose();
+            _cachedProvider = null;
         }
 
         private static string TruncateToTokenEstimate(string text, int maxTokens)

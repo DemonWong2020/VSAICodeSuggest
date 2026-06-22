@@ -38,7 +38,7 @@ namespace AICodeSuggest.Services
 
         private void WriteMessage(string level, string message)
         {
-            _package.JoinableTaskFactory.Run(async () =>
+            _package.JoinableTaskFactory.RunAsync(async () =>
             {
                 await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
 
